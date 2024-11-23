@@ -6,14 +6,9 @@ import { db } from './firebase';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
 import './App.css';
 
-const API_URL = process.env.NODE_ENV === 'production' 
-  ? '/api'  // In production, use relative path
-  : 'http://localhost:5000'; // In development, use localhost
-
 // Initial users data
 const initialUsers = [
   {
-    id: 1,
     name: 'John Doe',
     email: 'john@ironwolf.com',
     role: 'Manager',
@@ -23,7 +18,6 @@ const initialUsers = [
     image: '👨‍💼'
   },
   {
-    id: 2,
     name: 'Jane Smith',
     email: 'jane@ironwolf.com',
     role: 'Layout Artist',
@@ -897,7 +891,31 @@ function App() {
           id: doc.id,
           ...doc.data()
         }));
-        setUsers(usersData);
+
+        // If no users exist, add initial users
+        if (usersData.length === 0) {
+          console.log('No users found, adding initial users...');
+          const addInitialUsers = async () => {
+            for (const user of initialUsers) {
+              try {
+                const docRef = await addDoc(collection(db, 'users'), user);
+                console.log('Added user with ID:', docRef.id);
+              } catch (error) {
+                console.error('Error adding initial user:', error);
+              }
+            }
+            // Fetch users again after adding initial data
+            const newSnapshot = await getDocs(collection(db, 'users'));
+            const newUsersData = newSnapshot.docs.map(doc => ({
+              id: doc.id,
+              ...doc.data()
+            }));
+            setUsers(newUsersData);
+          };
+          await addInitialUsers();
+        } else {
+          setUsers(usersData);
+        }
       } catch (error) {
         console.error('Error fetching users:', error);
         toast.error('Failed to load users');
