@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Toaster, toast } from 'react-hot-toast';
-import axios from 'axios';
+import { db } from './firebase';
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
 import './App.css';
 
 const API_URL = process.env.NODE_ENV === 'production' 
@@ -426,11 +427,16 @@ function UserManagement({ users, setUsers }) {
 
   const handleAddUser = async () => {
     try {
-      const response = await axios.post(`${API_URL}/users`, {
+      const docRef = await addDoc(collection(db, 'users'), {
         ...formData,
         lastActive: 'Just now'
       });
-      setUsers([...users, response.data]);
+      const addedUser = {
+        id: docRef.id,
+        ...formData,
+        lastActive: 'Just now'
+      };
+      setUsers([...users, addedUser]);
       setIsAddingUser(false);
       setFormData({
         name: '',
@@ -449,8 +455,9 @@ function UserManagement({ users, setUsers }) {
 
   const handleEditUser = async () => {
     try {
-      const response = await axios.put(`${API_URL}/users/${editingUser.id}`, formData);
-      setUsers(users.map(user => user.id === editingUser.id ? response.data : user));
+      const userRef = doc(db, 'users', editingUser.id);
+      await updateDoc(userRef, formData);
+      setUsers(users.map(user => user.id === editingUser.id ? { ...user, ...formData } : user));
       setEditingUser(null);
       setFormData({
         name: '',
@@ -469,7 +476,7 @@ function UserManagement({ users, setUsers }) {
 
   const handleDeleteUser = async (userId) => {
     try {
-      await axios.delete(`${API_URL}/users/${userId}`);
+      await deleteDoc(doc(db, 'users', userId));
       setUsers(users.filter(user => user.id !== userId));
       toast.success('User deleted successfully!');
     } catch (error) {
@@ -882,11 +889,15 @@ function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
-    // Fetch users from JSON Server
+    // Fetch users from Firebase
     const fetchUsers = async () => {
       try {
-        const response = await axios.get(`${API_URL}/users`);
-        setUsers(response.data);
+        const querySnapshot = await getDocs(collection(db, 'users'));
+        const usersData = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        setUsers(usersData);
       } catch (error) {
         console.error('Error fetching users:', error);
         toast.error('Failed to load users');
@@ -897,11 +908,16 @@ function App() {
 
   const handleAddUser = async (newUser) => {
     try {
-      const response = await axios.post(`${API_URL}/users`, {
+      const docRef = await addDoc(collection(db, 'users'), {
         ...newUser,
         lastActive: 'Just now'
       });
-      setUsers([...users, response.data]);
+      const addedUser = {
+        id: docRef.id,
+        ...newUser,
+        lastActive: 'Just now'
+      };
+      setUsers([...users, addedUser]);
       toast.success('User added successfully');
     } catch (error) {
       console.error('Error adding user:', error);
@@ -911,8 +927,9 @@ function App() {
 
   const handleUpdateUser = async (id, updatedUser) => {
     try {
-      const response = await axios.put(`${API_URL}/users/${id}`, updatedUser);
-      setUsers(users.map(user => user.id === id ? response.data : user));
+      const userRef = doc(db, 'users', id);
+      await updateDoc(userRef, updatedUser);
+      setUsers(users.map(user => user.id === id ? { ...user, ...updatedUser } : user));
       toast.success('User updated successfully');
     } catch (error) {
       console.error('Error updating user:', error);
@@ -922,7 +939,7 @@ function App() {
 
   const handleDeleteUser = async (id) => {
     try {
-      await axios.delete(`${API_URL}/users/${id}`);
+      await deleteDoc(doc(db, 'users', id));
       setUsers(users.filter(user => user.id !== id));
       toast.success('User deleted successfully');
     } catch (error) {
