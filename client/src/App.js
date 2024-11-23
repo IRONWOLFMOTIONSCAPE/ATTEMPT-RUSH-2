@@ -2,7 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Toaster, toast } from 'react-hot-toast';
+import axios from 'axios';
 import './App.css';
+
+const API_URL = process.env.NODE_ENV === 'production' 
+  ? '/api'  // In production, use relative path
+  : 'http://localhost:5000'; // In development, use localhost
 
 // Initial users data
 const initialUsers = [
@@ -419,46 +424,57 @@ function UserManagement({ users, setUsers }) {
     image: '👤'
   });
 
-  const handleAddUser = () => {
-    const newUser = {
-      id: users.length + 1,
-      ...formData,
-      lastActive: 'Just now'
-    };
-    setUsers([...users, newUser]);
-    setIsAddingUser(false);
-    setFormData({
-      name: '',
-      email: '',
-      role: 'Layout Artist',
-      department: '',
-      status: 'Active',
-      image: '👤'
-    });
-    toast.success('User added successfully!');
+  const handleAddUser = async () => {
+    try {
+      const response = await axios.post(`${API_URL}/users`, {
+        ...formData,
+        lastActive: 'Just now'
+      });
+      setUsers([...users, response.data]);
+      setIsAddingUser(false);
+      setFormData({
+        name: '',
+        email: '',
+        role: 'Layout Artist',
+        department: '',
+        status: 'Active',
+        image: '👤'
+      });
+      toast.success('User added successfully!');
+    } catch (error) {
+      console.error('Error adding user:', error);
+      toast.error('Failed to add user');
+    }
   };
 
-  const handleEditUser = () => {
-    const updatedUsers = users.map(u => 
-      u.id === editingUser.id ? { ...u, ...formData } : u
-    );
-    setUsers(updatedUsers);
-    setEditingUser(null);
-    setFormData({
-      name: '',
-      email: '',
-      role: 'Layout Artist',
-      department: '',
-      status: 'Active',
-      image: '👤'
-    });
-    toast.success('User updated successfully!');
+  const handleEditUser = async () => {
+    try {
+      const response = await axios.put(`${API_URL}/users/${editingUser.id}`, formData);
+      setUsers(users.map(user => user.id === editingUser.id ? response.data : user));
+      setEditingUser(null);
+      setFormData({
+        name: '',
+        email: '',
+        role: 'Layout Artist',
+        department: '',
+        status: 'Active',
+        image: '👤'
+      });
+      toast.success('User updated successfully!');
+    } catch (error) {
+      console.error('Error updating user:', error);
+      toast.error('Failed to update user');
+    }
   };
 
-  const handleDeleteUser = (userId) => {
-    if (window.confirm('Are you sure you want to delete this user?')) {
-      setUsers(users.filter(u => u.id !== userId));
+  const handleDeleteUser = async (userId) => {
+    try {
+      await axios.delete(`${API_URL}/users/${userId}`);
+      setUsers(users.filter(user => user.id !== userId));
       toast.success('User deleted successfully!');
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      toast.error('Failed to delete user');
     }
   };
 
@@ -861,12 +877,62 @@ function Dashboard({ user, onLogout, users, setUsers }) {
 
 // Main App Component
 function App() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [users, setUsers] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
-  const [users, setUsers] = useState(initialUsers);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  useEffect(() => {
+    // Fetch users from JSON Server
+    const fetchUsers = async () => {
+      try {
+        const response = await axios.get(`${API_URL}/users`);
+        setUsers(response.data);
+      } catch (error) {
+        console.error('Error fetching users:', error);
+        toast.error('Failed to load users');
+      }
+    };
+    fetchUsers();
+  }, []);
+
+  const handleAddUser = async (newUser) => {
+    try {
+      const response = await axios.post(`${API_URL}/users`, {
+        ...newUser,
+        lastActive: 'Just now'
+      });
+      setUsers([...users, response.data]);
+      toast.success('User added successfully');
+    } catch (error) {
+      console.error('Error adding user:', error);
+      toast.error('Failed to add user');
+    }
+  };
+
+  const handleUpdateUser = async (id, updatedUser) => {
+    try {
+      const response = await axios.put(`${API_URL}/users/${id}`, updatedUser);
+      setUsers(users.map(user => user.id === id ? response.data : user));
+      toast.success('User updated successfully');
+    } catch (error) {
+      console.error('Error updating user:', error);
+      toast.error('Failed to update user');
+    }
+  };
+
+  const handleDeleteUser = async (id) => {
+    try {
+      await axios.delete(`${API_URL}/users/${id}`);
+      setUsers(users.filter(user => user.id !== id));
+      toast.success('User deleted successfully');
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      toast.error('Failed to delete user');
+    }
+  };
 
   const handleLogin = () => {
-    setIsLoggedIn(true);
+    setIsAuthenticated(true);
   };
 
   const handleUserSelect = (user) => {
@@ -881,7 +947,7 @@ function App() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Toaster position="top-right" />
-      {!isLoggedIn ? (
+      {!isAuthenticated ? (
         <Login onLogin={handleLogin} />
       ) : !selectedUser ? (
         <UserSelection users={users} onSelectUser={handleUserSelect} />
